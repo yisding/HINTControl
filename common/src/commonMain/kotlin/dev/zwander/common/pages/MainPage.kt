@@ -73,6 +73,7 @@ fun MainPage(
                         data = basicData?.signal?.fourG,
                         advancedData = advancedData?.cell?.fourG,
                         expandedKey = "lte_cell_data_expanded",
+                        gpsData = advancedData?.cell?.gps,
                         modifier = it,
                     )
                 },
@@ -96,6 +97,7 @@ fun MainPage(
                         data = basicData?.signal?.fiveG,
                         advancedData = advancedData?.cell?.fiveG,
                         expandedKey = "5g_cell_data_expanded",
+                        gpsData = advancedData?.cell?.gps,
                         modifier = it,
                     )
                 },

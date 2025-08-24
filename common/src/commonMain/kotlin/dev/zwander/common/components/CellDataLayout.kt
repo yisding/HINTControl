@@ -3,22 +3,35 @@
 package dev.zwander.common.components
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import dev.zwander.common.data.generateInfoList
 import dev.zwander.common.data.set
+import dev.zwander.common.model.adapters.AdvancedCellData
 import dev.zwander.common.model.adapters.AdvancedDataLTE
 import dev.zwander.common.model.adapters.BaseAdvancedData
 import dev.zwander.common.model.adapters.BaseCellData
 import dev.zwander.common.model.adapters.CellDataLTE
+import dev.zwander.common.util.CellMapperUtils
+import dev.zwander.common.util.UrlHandler
 import dev.zwander.common.util.bulletedList
 import dev.zwander.resources.common.MR
 import kotlin.experimental.ExperimentalObjCRefinement
@@ -57,6 +70,7 @@ fun CellDataLayout(
     data: BaseCellData?,
     advancedData: BaseAdvancedData?,
     expandedKey: String,
+    gpsData: dev.zwander.common.model.adapters.GPSData? = null,
     modifier: Modifier = Modifier,
 ) {
     val basicItems = generateInfoList(data) {
@@ -87,13 +101,54 @@ fun CellDataLayout(
 
     EmptiableContent(
         content = {
-            SelectionContainer {
-                InfoRow(
-                    items = basicItems,
-                    modifier = Modifier.fillMaxWidth(),
-                    advancedItems = advancedItems,
-                    expandedKey = expandedKey,
+            Column {
+                SelectionContainer {
+                    InfoRow(
+                        items = basicItems,
+                        modifier = Modifier.fillMaxWidth(),
+                        advancedItems = advancedItems,
+                        expandedKey = expandedKey,
+                    )
+                }
+                
+                // Add CellMapper button if we have the necessary data
+                val cellMapperUrl = CellMapperUtils.generateCellMapperUrl(
+                    cellData = data,
+                    advancedData = advancedData,
+                    lat = gpsData?.lat,
+                    lon = gpsData?.lon
                 )
+                
+                cellMapperUrl?.let { url ->
+                    Card(
+                        onClick = {
+                            UrlHandler.launchUrl(url)
+                        },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                            Text(
+                                text = stringResource(MR.strings.view_in_cellmapper),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
             }
         },
         emptyContent = {
