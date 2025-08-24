@@ -124,7 +124,7 @@ sealed class Page(
     data object ReadingsHistory : Page(
         titleRes = MR.strings.readings_history,
         key = READINGS_HISTORY_PAGE_KEY,
-        icon = { rememberVectorPainter(Icons.Default.DateRange) },
+        icon = { rememberVectorPainter(Icons.Default.List) },
         refreshAction = null,
         needsRefresh = null,
         render = { ReadingsHistoryPage(it) },

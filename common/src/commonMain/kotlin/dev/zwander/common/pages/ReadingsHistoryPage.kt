@@ -45,12 +45,12 @@ import dev.zwander.common.data.Page
 import dev.zwander.common.data.SavedReading
 import dev.zwander.common.data.generateInfoList
 import dev.zwander.common.data.set
+import dev.zwander.common.database.getRoomDatabase
 import dev.zwander.common.model.GlobalModel
 import dev.zwander.compose.alertdialog.InWindowAlertDialog
 import dev.zwander.resources.common.MR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -60,11 +60,9 @@ fun ReadingsHistoryPage(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    val database = GlobalModel.currentDatabase
-    val savedReadings by remember(database) {
-        database?.getSavedReadingDao()?.getAll()
-            ?: kotlinx.coroutines.flow.flowOf(emptyList())
-    }.collectAsState(emptyList())
+    val database = remember { getRoomDatabase() }
+    val savedReadings by database.getSavedReadingDao().getAll()
+        .collectAsState(emptyList())
 
     var selectedReading by remember { mutableStateOf<SavedReading?>(null) }
     var readingToDelete by remember { mutableStateOf<SavedReading?>(null) }
@@ -133,10 +131,10 @@ fun ReadingsHistoryPage(
                             // Show signal strength summary
                             val signalItems = generateInfoList(reading.mainData?.signal) {
                                 reading.mainData?.signal?.fourG?.let { lte ->
-                                    this[MR.strings.lte_signal] = "${lte.rsrp ?: "?"} dBm / ${lte.sinr ?: "?"} dB"
+                                    this[MR.strings.lte] = "${lte.rsrp ?: "?"} dBm / ${lte.sinr ?: "?"} dB"
                                 }
                                 reading.mainData?.signal?.fiveG?.let { fiveG ->
-                                    this[MR.strings.five_g_signal] = "${fiveG.rsrp ?: "?"} dBm / ${fiveG.sinr ?: "?"} dB"
+                                    this[MR.strings.five_g] = "${fiveG.rsrp ?: "?"} dBm / ${fiveG.sinr ?: "?"} dB"
                                 }
                             }
                             
@@ -183,7 +181,7 @@ fun ReadingsHistoryPage(
                 Button(
                     onClick = {
                         scope.launch(Dispatchers.IO) {
-                            database?.getSavedReadingDao()?.delete(reading.id)
+                            database.getSavedReadingDao().delete(reading.id)
                             readingToDelete = null
                         }
                     }
@@ -228,10 +226,12 @@ fun ReadingDetailsDialog(
                     reading.notes?.let { this[MR.strings.notes] = it }
                 }
                 
-                InfoRow(
-                    items = basicInfo,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (basicInfo.isNotEmpty()) {
+                    InfoRow(
+                        items = basicInfo,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 
                 // Main data
                 reading.mainData?.let { mainData ->
@@ -255,13 +255,15 @@ fun ReadingDetailsDialog(
                         }
                     }
                     
-                    InfoRow(
-                        items = mainInfo,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (mainInfo.isNotEmpty()) {
+                        InfoRow(
+                            items = mainInfo,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 
-                // Signal data
+                // Signal data  
                 reading.mainData?.signal?.let { signal ->
                     Text(
                         text = stringResource(MR.strings.signal),
@@ -270,25 +272,27 @@ fun ReadingDetailsDialog(
                     
                     val signalInfo = generateInfoList(signal) {
                         signal.fourG?.let { lte ->
-                            this[MR.strings.lte_rsrp] = "${lte.rsrp ?: "?"} dBm"
-                            this[MR.strings.lte_rsrq] = "${lte.rsrq ?: "?"} dB"
-                            this[MR.strings.lte_sinr] = "${lte.sinr ?: "?"} dB"
-                            this[MR.strings.lte_band] = lte.band
-                            this[MR.strings.lte_bandwidth] = lte.bandwidth
+                            this[MR.strings.rsrp] = "${lte.rsrp ?: "?"} dBm"
+                            this[MR.strings.rsrq] = "${lte.rsrq ?: "?"} dB"
+                            this[MR.strings.sinr] = "${lte.sinr ?: "?"} dB"
+                            this[MR.strings.band] = lte.band
+                            this[MR.strings.bandwidth] = lte.bandwidth
                         }
                         signal.fiveG?.let { fiveG ->
-                            this[MR.strings.five_g_rsrp] = "${fiveG.rsrp ?: "?"} dBm"
-                            this[MR.strings.five_g_rsrq] = "${fiveG.rsrq ?: "?"} dB"
-                            this[MR.strings.five_g_sinr] = "${fiveG.sinr ?: "?"} dB"
-                            this[MR.strings.five_g_band] = fiveG.band
-                            this[MR.strings.five_g_bandwidth] = fiveG.bandwidth
+                            this[MR.strings.rsrp] = "${fiveG.rsrp ?: "?"} dBm"
+                            this[MR.strings.rsrq] = "${fiveG.rsrq ?: "?"} dB"
+                            this[MR.strings.sinr] = "${fiveG.sinr ?: "?"} dB"
+                            this[MR.strings.band] = fiveG.band
+                            this[MR.strings.bandwidth] = fiveG.bandwidth
                         }
                     }
                     
-                    InfoRow(
-                        items = signalInfo,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (signalInfo.isNotEmpty()) {
+                        InfoRow(
+                            items = signalInfo,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 
                 // Cell data
@@ -300,25 +304,27 @@ fun ReadingDetailsDialog(
                     
                     val cellInfo = generateInfoList(cell) {
                         cell.fourG?.let { lte ->
-                            this[MR.strings.lte_cell_id] = lte.cid?.toString()
-                            this[MR.strings.lte_enb] = lte.eNBID?.toString()
-                            this[MR.strings.lte_pci] = lte.pci?.toString()
-                            this[MR.strings.lte_tac] = lte.tac?.toString()
-                            this[MR.strings.lte_earfcn] = lte.earfcn?.toString()
+                            this[MR.strings.cell_id] = lte.cid?.toString()
+                            this[MR.strings.enb_id] = lte.eNBID?.toString()
+                            this[MR.strings.pci] = lte.pci?.toString()
+                            this[MR.strings.tac] = lte.tac?.toString()
+                            this[MR.strings.earfcn] = lte.earfcn?.toString()
                         }
                         cell.fiveG?.let { fiveG ->
-                            this[MR.strings.five_g_cell_id] = fiveG.nci?.toString()
-                            this[MR.strings.five_g_gnb] = fiveG.gNBID?.toString()
-                            this[MR.strings.five_g_pci] = fiveG.pci?.toString()
-                            this[MR.strings.five_g_tac] = fiveG.tac?.toString()
-                            this[MR.strings.five_g_nrarfcn] = fiveG.nrarfcn?.toString()
+                            this[MR.strings.nci] = fiveG.nci?.toString()
+                            this[MR.strings.gnb_id] = fiveG.gNBID?.toString()
+                            this[MR.strings.pci] = fiveG.pci?.toString()
+                            this[MR.strings.tac] = fiveG.tac?.toString()
+                            this[MR.strings.nrarfcn] = fiveG.nrarfcn?.toString()
                         }
                     }
                     
-                    InfoRow(
-                        items = cellInfo,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (cellInfo.isNotEmpty()) {
+                        InfoRow(
+                            items = cellInfo,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         },
