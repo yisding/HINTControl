@@ -5,8 +5,8 @@ package dev.zwander.common.pages
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -206,7 +206,7 @@ fun MainPage(
                         enabled = MainModel.currentMainData.value != null,
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Save,
+                            imageVector = Icons.Default.Bookmark,
                             contentDescription = stringResource(MR.strings.save_reading),
                         )
                     }
@@ -215,7 +215,7 @@ fun MainPage(
                         onClick = { navigateToHistory = true },
                     ) {
                         Icon(
-                            imageVector = Icons.Default.History,
+                            imageVector = Icons.Default.DateRange,
                             contentDescription = stringResource(MR.strings.readings_history),
                         )
                     }

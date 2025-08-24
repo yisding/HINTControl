@@ -27,6 +27,7 @@ fun SaveReadingDialog(
     val scope = rememberCoroutineScope()
 
     InWindowAlertDialog(
+        showing = true,
         onDismissRequest = onDismiss,
         title = {
             Text(stringResource(MR.strings.save_reading))

@@ -73,7 +73,7 @@ expect fun getDatabaseBuilder(): RoomDatabase.Builder<dev.zwander.common.databas
 fun getRoomDatabase(): dev.zwander.common.database.Database {
     return getDatabaseBuilder()
         .fallbackToDestructiveMigrationOnDowngrade(false)
-        .fallbackToDestructiveMigration()
+        .fallbackToDestructiveMigration(dropAllTables = true)
         .setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()

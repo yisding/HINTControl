@@ -1,89 +1,174 @@
 package dev.zwander.common.pages
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.surfaceColorAtElevation
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.compose.stringResource
 import dev.zwander.common.components.HybridElevatedCard
 import dev.zwander.common.components.InfoRow
+import dev.zwander.common.data.Page
 import dev.zwander.common.data.SavedReading
-import dev.zwander.common.database.getRoomDatabase
+import dev.zwander.common.data.generateInfoList
+import dev.zwander.common.data.set
+import dev.zwander.common.model.GlobalModel
 import dev.zwander.compose.alertdialog.InWindowAlertDialog
 import dev.zwander.resources.common.MR
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingsHistoryPage(
     modifier: Modifier = Modifier,
 ) {
-    val database = remember { getRoomDatabase() }
-    val savedReadingsFlow = remember { database.getSavedReadingDao().getAll() }
-    val savedReadings by savedReadingsFlow.collectAsState(initial = emptyList())
-    
+    val scope = rememberCoroutineScope()
+    val database = GlobalModel.currentDatabase
+    val savedReadings by remember(database) {
+        database?.getSavedReadingDao()?.getAll()
+            ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(emptyList())
+
     var selectedReading by remember { mutableStateOf<SavedReading?>(null) }
     var readingToDelete by remember { mutableStateOf<SavedReading?>(null) }
-    val scope = rememberCoroutineScope()
-    
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-    ) {
-        Text(
-            text = stringResource(MR.strings.readings_history),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp),
-        )
-        
+
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            TopAppBar(
+                title = { Text(text = stringResource(MR.strings.readings_history)) },
+                navigationIcon = {
+                    IconButton(onClick = { GlobalModel.currentPage.value = Page.Main }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(MR.strings.back))
+                    }
+                },
+            )
+        },
+    ) { paddingValues ->
         if (savedReadings.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = stringResource(MR.strings.no_saved_readings),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
             }
         } else {
             LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
+                contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(savedReadings) { reading ->
-                    SavedReadingCard(
-                        reading = reading,
-                        onViewDetails = { selectedReading = reading },
-                        onDelete = { readingToDelete = reading },
-                    )
+                items(items = savedReadings, key = { it.id }) { reading ->
+                    HybridElevatedCard(
+                        onClick = { selectedReading = reading },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = reading.name,
+                                style = MaterialTheme.typography.headlineSmall,
+                            )
+                            
+                            reading.location?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            
+                            Text(
+                                text = reading.time.toLocalDateTime(TimeZone.currentSystemDefault()).toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                            
+                            // Show signal strength summary
+                            val signalItems = generateInfoList(reading.mainData?.signal) {
+                                reading.mainData?.signal?.fourG?.let { lte ->
+                                    this[MR.strings.lte_signal] = "${lte.rsrp ?: "?"} dBm / ${lte.sinr ?: "?"} dB"
+                                }
+                                reading.mainData?.signal?.fiveG?.let { fiveG ->
+                                    this[MR.strings.five_g_signal] = "${fiveG.rsrp ?: "?"} dBm / ${fiveG.sinr ?: "?"} dB"
+                                }
+                            }
+                            
+                            if (signalItems.isNotEmpty()) {
+                                InfoRow(
+                                    items = signalItems,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                            ) {
+                                TextButton(onClick = { selectedReading = reading }) {
+                                    Text(stringResource(MR.strings.view_details))
+                                }
+                                IconButton(onClick = { readingToDelete = reading }) {
+                                    Icon(Icons.Default.Delete, stringResource(MR.strings.delete))
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-    
-    // Details Dialog
-    selectedReading?.let { reading ->
-        ReadingDetailsDialog(
-            reading = reading,
-            onDismiss = { selectedReading = null },
-        )
-    }
-    
-    // Delete Confirmation Dialog
+
+    // Delete confirmation dialog
     readingToDelete?.let { reading ->
         InWindowAlertDialog(
+            showing = true,
             onDismissRequest = { readingToDelete = null },
             title = {
                 Text(stringResource(MR.strings.delete_reading))
@@ -92,314 +177,155 @@ fun ReadingsHistoryPage(
                 Text(stringResource(MR.strings.delete_reading_confirmation))
             },
             buttons = {
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    TextButton(
-                        onClick = { readingToDelete = null },
-                    ) {
-                        Text(stringResource(MR.strings.cancel))
-                    }
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                database.getSavedReadingDao().delete(reading.id)
-                                readingToDelete = null
-                            }
-                        },
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                    ) {
-                        Text(stringResource(MR.strings.delete))
-                    }
+                TextButton(onClick = { readingToDelete = null }) {
+                    Text(stringResource(MR.strings.cancel))
                 }
-            },
+                Button(
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            database?.getSavedReadingDao()?.delete(reading.id)
+                            readingToDelete = null
+                        }
+                    }
+                ) {
+                    Text(stringResource(MR.strings.delete))
+                }
+            }
+        )
+    }
+
+    // Details dialog
+    selectedReading?.let { reading ->
+        ReadingDetailsDialog(
+            reading = reading,
+            onDismiss = { selectedReading = null }
         )
     }
 }
 
 @Composable
-private fun SavedReadingCard(
-    reading: SavedReading,
-    onViewDetails: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    HybridElevatedCard(
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        text = reading.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    
-                    reading.location?.let { location ->
-                        Text(
-                            text = location,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    
-                    val instant = Instant.fromEpochMilliseconds(reading.timeMillis)
-                    val localDateTime = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    Text(
-                        text = "${localDateTime.date} ${localDateTime.hour.toString().padStart(2, '0')}:${localDateTime.minute.toString().padStart(2, '0')}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                
-                Row {
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = stringResource(MR.strings.delete),
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
-            
-            // Display key signal metrics
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                reading.mainData?.signal?.fourG?.let { lte ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "LTE",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        Text(
-                            text = "${lte.rsrp ?: "--"} dBm",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "RSRP",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                
-                reading.mainData?.signal?.fiveG?.let { fiveG ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "5G",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        Text(
-                            text = "${fiveG.rsrp ?: "--"} dBm",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "RSRP",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                
-                reading.mainData?.signal?.fourG?.let { lte ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "LTE",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        Text(
-                            text = "${lte.sinr ?: "--"} dB",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "SINR",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                
-                reading.mainData?.signal?.fiveG?.let { fiveG ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "5G",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        Text(
-                            text = "${fiveG.sinr ?: "--"} dB",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "SINR",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Button(
-                onClick = onViewDetails,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(MR.strings.view_details))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReadingDetailsDialog(
+fun ReadingDetailsDialog(
     reading: SavedReading,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     InWindowAlertDialog(
+        showing = true,
         onDismissRequest = onDismiss,
         title = {
             Text(reading.name)
         },
         text = {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp),
+                    .padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                item {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        reading.location?.let { location ->
-                            InfoRow(
-                                label = stringResource(MR.strings.location_optional).replace(" (optional)", ""),
-                                value = location,
-                            )
-                        }
-                        
-                        reading.notes?.let { notes ->
-                            InfoRow(
-                                label = stringResource(MR.strings.notes_optional).replace(" (optional)", ""),
-                                value = notes,
-                            )
-                        }
-                        
-                        val instant = Instant.fromEpochMilliseconds(reading.timeMillis)
-                        val localDateTime = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                        InfoRow(
-                            label = "Time",
-                            value = "${localDateTime.date} ${localDateTime.hour.toString().padStart(2, '0')}:${localDateTime.minute.toString().padStart(2, '0')}",
-                        )
-                    }
+                // Basic info
+                val basicInfo = generateInfoList(reading) {
+                    this[MR.strings.timestamp] = reading.time.toLocalDateTime(TimeZone.currentSystemDefault()).toString()
+                    reading.location?.let { this[MR.strings.location] = it }
+                    reading.notes?.let { this[MR.strings.notes] = it }
                 }
                 
-                // LTE Data
-                reading.mainData?.signal?.fourG?.let { lte ->
-                    item {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = stringResource(MR.strings.lte),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            lte.bands?.let { InfoRow(label = stringResource(MR.strings.bands), value = it.joinToString(", ")) }
-                            lte.rsrp?.let { InfoRow(label = stringResource(MR.strings.rsrp), value = "$it dBm") }
-                            lte.rsrq?.let { InfoRow(label = stringResource(MR.strings.rsrq), value = "$it dB") }
-                            lte.rssi?.let { InfoRow(label = stringResource(MR.strings.rssi), value = "$it dBm") }
-                            lte.sinr?.let { InfoRow(label = stringResource(MR.strings.sinr), value = "$it dB") }
-                            lte.cid?.let { InfoRow(label = stringResource(MR.strings.cid), value = it.toString()) }
-                            lte.nbid?.let { InfoRow(label = stringResource(MR.strings.enbid), value = it.toString()) }
+                InfoRow(
+                    items = basicInfo,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                
+                // Main data
+                reading.mainData?.let { mainData ->
+                    Text(
+                        text = stringResource(MR.strings.general),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    
+                    val mainInfo = generateInfoList(mainData) {
+                        mainData.device?.let { device ->
+                            this[MR.strings.model] = device.model
+                            this[MR.strings.manufacturer] = device.manufacturer
+                            this[MR.strings.software_version] = device.softwareVersion
+                            this[MR.strings.hardware_version] = device.hardwareVersion
+                        }
+                        mainData.generic?.let { generic ->
+                            this[MR.strings.connection] = generic.connectionStatus
+                            this[MR.strings.connection_text] = generic.connectionText
+                            this[MR.strings.has_sim] = generic.hasSim?.toString()
+                            this[MR.strings.roaming] = generic.roaming?.toString()
                         }
                     }
+                    
+                    InfoRow(
+                        items = mainInfo,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
                 
-                // 5G Data
-                reading.mainData?.signal?.fiveG?.let { fiveG ->
-                    item {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = stringResource(MR.strings.five_g),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            fiveG.bands?.let { InfoRow(label = stringResource(MR.strings.bands), value = it.joinToString(", ")) }
-                            fiveG.rsrp?.let { InfoRow(label = stringResource(MR.strings.rsrp), value = "$it dBm") }
-                            fiveG.rsrq?.let { InfoRow(label = stringResource(MR.strings.rsrq), value = "$it dB") }
-                            fiveG.rssi?.let { InfoRow(label = stringResource(MR.strings.rssi), value = "$it dBm") }
-                            fiveG.sinr?.let { InfoRow(label = stringResource(MR.strings.sinr), value = "$it dB") }
-                            fiveG.cid?.let { InfoRow(label = stringResource(MR.strings.cid), value = it.toString()) }
-                            fiveG.nbid?.let { InfoRow(label = stringResource(MR.strings.gnbid), value = it.toString()) }
+                // Signal data
+                reading.mainData?.signal?.let { signal ->
+                    Text(
+                        text = stringResource(MR.strings.signal),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    
+                    val signalInfo = generateInfoList(signal) {
+                        signal.fourG?.let { lte ->
+                            this[MR.strings.lte_rsrp] = "${lte.rsrp ?: "?"} dBm"
+                            this[MR.strings.lte_rsrq] = "${lte.rsrq ?: "?"} dB"
+                            this[MR.strings.lte_sinr] = "${lte.sinr ?: "?"} dB"
+                            this[MR.strings.lte_band] = lte.band
+                            this[MR.strings.lte_bandwidth] = lte.bandwidth
+                        }
+                        signal.fiveG?.let { fiveG ->
+                            this[MR.strings.five_g_rsrp] = "${fiveG.rsrp ?: "?"} dBm"
+                            this[MR.strings.five_g_rsrq] = "${fiveG.rsrq ?: "?"} dB"
+                            this[MR.strings.five_g_sinr] = "${fiveG.sinr ?: "?"} dB"
+                            this[MR.strings.five_g_band] = fiveG.band
+                            this[MR.strings.five_g_bandwidth] = fiveG.bandwidth
                         }
                     }
+                    
+                    InfoRow(
+                        items = signalInfo,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
                 
-                // Device Data
-                reading.mainData?.device?.let { device ->
-                    item {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = stringResource(MR.strings.device),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            device.friendlyName?.let { InfoRow(label = "Name", value = it) }
-                            device.model?.let { InfoRow(label = "Model", value = it) }
-                            device.softwareVersion?.let { InfoRow(label = "Software", value = it) }
+                // Cell data
+                reading.cellData?.cell?.let { cell ->
+                    Text(
+                        text = stringResource(MR.strings.cell_info),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    
+                    val cellInfo = generateInfoList(cell) {
+                        cell.fourG?.let { lte ->
+                            this[MR.strings.lte_cell_id] = lte.cid?.toString()
+                            this[MR.strings.lte_enb] = lte.eNBID?.toString()
+                            this[MR.strings.lte_pci] = lte.pci?.toString()
+                            this[MR.strings.lte_tac] = lte.tac?.toString()
+                            this[MR.strings.lte_earfcn] = lte.earfcn?.toString()
+                        }
+                        cell.fiveG?.let { fiveG ->
+                            this[MR.strings.five_g_cell_id] = fiveG.nci?.toString()
+                            this[MR.strings.five_g_gnb] = fiveG.gNBID?.toString()
+                            this[MR.strings.five_g_pci] = fiveG.pci?.toString()
+                            this[MR.strings.five_g_tac] = fiveG.tac?.toString()
+                            this[MR.strings.five_g_nrarfcn] = fiveG.nrarfcn?.toString()
                         }
                     }
+                    
+                    InfoRow(
+                        items = cellInfo,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         },
         buttons = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            TextButton(onClick = onDismiss) {
                 Text(stringResource(MR.strings.ok))
             }
-        },
-        modifier = modifier,
+        }
     )
 }
