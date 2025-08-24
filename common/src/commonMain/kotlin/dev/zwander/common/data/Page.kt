@@ -30,6 +30,7 @@ sealed class Page(
         const val WIFI_PAGE_KEY = "wifi_page"
         const val SETTINGS_PAGE_KEY = "settings_page"
         const val FUZZER_PAGE_KEY = "fuzzer_page"
+        const val READINGS_HISTORY_PAGE_KEY = "readings_history_page"
 
         fun pageFromKey(key: String): Page {
             return when (key) {
@@ -39,6 +40,7 @@ sealed class Page(
                 WIFI_PAGE_KEY -> WifiConfig
                 SETTINGS_PAGE_KEY -> SettingsPage
                 FUZZER_PAGE_KEY -> FuzzerPage
+                READINGS_HISTORY_PAGE_KEY -> ReadingsHistory
                 else -> throw IllegalArgumentException("Unknown key $key")
             }
         }
@@ -117,5 +119,14 @@ sealed class Page(
         refreshAction = null,
         needsRefresh = null,
         render = { FuzzerPage(it) },
+    )
+    
+    data object ReadingsHistory : Page(
+        titleRes = MR.strings.readings_history,
+        key = READINGS_HISTORY_PAGE_KEY,
+        icon = { rememberVectorPainter(Icons.Default.History) },
+        refreshAction = null,
+        needsRefresh = null,
+        render = { ReadingsHistoryPage(it) },
     )
 }

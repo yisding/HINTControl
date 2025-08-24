@@ -11,6 +11,7 @@ import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverter
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import dev.zwander.common.data.HistoricalSnapshot
+import dev.zwander.common.data.SavedReading
 import dev.zwander.common.model.adapters.CellDataRoot
 import dev.zwander.common.model.adapters.ClientDeviceData
 import dev.zwander.common.model.adapters.MainData
@@ -20,10 +21,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 
-@Database(entities = [HistoricalSnapshot::class], version = 1)
+@Database(entities = [HistoricalSnapshot::class, SavedReading::class], version = 2)
 @ConstructedBy(AppDatabaseConstructor::class)
 abstract class Database : RoomDatabase() {
     abstract fun getDao(): SnapshotDao
+    abstract fun getSavedReadingDao(): SavedReadingDao
 }
 
 @Dao
@@ -71,6 +73,7 @@ expect fun getDatabaseBuilder(): RoomDatabase.Builder<dev.zwander.common.databas
 fun getRoomDatabase(): dev.zwander.common.database.Database {
     return getDatabaseBuilder()
         .fallbackToDestructiveMigrationOnDowngrade(false)
+        .fallbackToDestructiveMigration()
         .setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()
@@ -122,4 +125,25 @@ class SimDataRootConverter {
     fun toSimDataRoot(root: String?): SimDataRoot? {
         return root?.let { Storage.json.decodeFromString(it) }
     }
+}
+
+@Dao
+interface SavedReadingDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(reading: SavedReading): Long
+
+    @Query("SELECT * FROM SavedReading ORDER BY timeMillis DESC")
+    fun getAll(): Flow<List<SavedReading>>
+
+    @Query("SELECT * FROM SavedReading WHERE id = :id")
+    suspend fun getById(id: Long): SavedReading?
+
+    @Query("DELETE FROM SavedReading WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM SavedReading")
+    suspend fun deleteAll()
+
+    @Query("UPDATE SavedReading SET name = :name, location = :location, notes = :notes WHERE id = :id")
+    suspend fun update(id: Long, name: String, location: String?, notes: String?)
 }

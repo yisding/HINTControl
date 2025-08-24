@@ -243,4 +243,17 @@
     <string name="cqi_index_helper_text">CQI stands for Channel Quality Indicator. The CQI Table Index represents the index of the table found in 3GPP TS 136.213 section 7.2.3.</string>
     <string name="rscp_helper_text">RSCP stands for Received Signal Code Power and is used as a signal strength indicator.</string>
     <string name="status_helper_text">Denotes the current connection status of the gateway to this cell.</string>
+    
+    <string name="save_reading">Save Reading</string>
+    <string name="reading_name">Name</string>
+    <string name="location_optional">Location (optional)</string>
+    <string name="notes_optional">Notes (optional)</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="readings_history">Readings History</string>
+    <string name="no_saved_readings">No saved readings yet</string>
+    <string name="delete_reading">Delete Reading</string>
+    <string name="delete_reading_confirmation">Are you sure you want to delete this reading?</string>
+    <string name="view_details">View Details</string>
+    <string name="delete">Delete</string>
 </resources>

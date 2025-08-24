@@ -4,8 +4,13 @@ package dev.zwander.common.pages
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,7 +34,9 @@ import dev.zwander.common.components.DeviceDataLayout
 import dev.zwander.common.components.InfoRow
 import dev.zwander.common.components.MainDataLayout
 import dev.zwander.common.components.PageGrid
+import dev.zwander.common.components.SaveReadingDialog
 import dev.zwander.common.components.SnapshotChart
+import dev.zwander.common.data.Page
 import dev.zwander.common.data.generateInfoList
 import dev.zwander.common.data.set
 import dev.zwander.common.model.GlobalModel
@@ -60,6 +67,8 @@ fun MainPage(
     val httpClient by GlobalModel.httpClient.collectAsState()
     val showSnapshots by SettingsModel.recordSnapshots.collectAsState()
     val scope = rememberCoroutineScope()
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var navigateToHistory by remember { mutableStateOf(false) }
 
     val items = remember {
         listOf(
@@ -186,32 +195,59 @@ fun MainPage(
                 it.render(Modifier.fillMaxWidth())
             },
             bottomBarContents = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            UserModel.logOut()
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = stringResource(MR.strings.log_out),
-                    )
-                }
+                    // Save and History buttons
+                    IconButton(
+                        onClick = { showSaveDialog = true },
+                        enabled = MainModel.currentMainData.value != null,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = stringResource(MR.strings.save_reading),
+                        )
+                    }
+                    
+                    IconButton(
+                        onClick = { navigateToHistory = true },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = stringResource(MR.strings.readings_history),
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+                    
+                    // Existing buttons
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                UserModel.logOut()
+                            }
+                        },
+                    ) {
+                        Text(
+                            text = stringResource(MR.strings.log_out),
+                        )
+                    }
 
-                Button(
-                    onClick = {
-                        showingRebootConfirmation = true
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.error),
-                    ),
-                ) {
-                    Text(
-                        text = stringResource(MR.strings.reboot),
-                    )
+                    Button(
+                        onClick = {
+                            showingRebootConfirmation = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.error),
+                        ),
+                    ) {
+                        Text(
+                            text = stringResource(MR.strings.reboot),
+                        )
+                    }
                 }
             },
             itemIsSelectable = {
@@ -292,4 +328,19 @@ fun MainPage(
             }
         },
     )
+    
+    if (showSaveDialog) {
+        SaveReadingDialog(
+            onDismiss = { showSaveDialog = false },
+            onSaved = { 
+                // Optionally show a success message or navigate to history
+            },
+        )
+    }
+    
+    if (navigateToHistory) {
+        // Navigate to history page - will implement this after creating the page
+        navigateToHistory = false
+        GlobalModel.currentPage.value = Page.ReadingsHistory
+    }
 }
