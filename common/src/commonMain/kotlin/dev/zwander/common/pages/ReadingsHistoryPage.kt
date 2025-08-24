@@ -51,10 +51,11 @@ import dev.zwander.compose.alertdialog.InWindowAlertDialog
 import dev.zwander.resources.common.MR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, kotlin.time.ExperimentalTime::class)
 @Composable
 fun ReadingsHistoryPage(
     modifier: Modifier = Modifier,
@@ -74,7 +75,7 @@ fun ReadingsHistoryPage(
                 title = { Text(text = stringResource(MR.strings.readings_history)) },
                 navigationIcon = {
                     IconButton(onClick = { GlobalModel.currentPage.value = Page.Main }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(MR.strings.back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
             )
@@ -124,7 +125,7 @@ fun ReadingsHistoryPage(
                             }
                             
                             Text(
-                                text = reading.time.toLocalDateTime(TimeZone.currentSystemDefault()).toString(),
+                                text = Instant.fromEpochMilliseconds(reading.timeMillis).toLocalDateTime(TimeZone.currentSystemDefault()).toString(),
                                 style = MaterialTheme.typography.labelSmall,
                             )
                             
@@ -201,6 +202,7 @@ fun ReadingsHistoryPage(
     }
 }
 
+@OptIn(kotlin.time.ExperimentalTime::class)
 @Composable
 fun ReadingDetailsDialog(
     reading: SavedReading,
@@ -219,19 +221,17 @@ fun ReadingDetailsDialog(
                     .padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Basic info
-                val basicInfo = generateInfoList(reading) {
-                    this[MR.strings.timestamp] = reading.time.toLocalDateTime(TimeZone.currentSystemDefault()).toString()
-                    reading.location?.let { this[MR.strings.location] = it }
-                    reading.notes?.let { this[MR.strings.notes] = it }
+                // Basic info - using location and notes directly as strings
+                reading.location?.let {
+                    Text("Location: $it", style = MaterialTheme.typography.bodyMedium)
                 }
-                
-                if (basicInfo.isNotEmpty()) {
-                    InfoRow(
-                        items = basicInfo,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                reading.notes?.let {
+                    Text("Notes: $it", style = MaterialTheme.typography.bodyMedium)
                 }
+                Text(
+                    "Time: ${Instant.fromEpochMilliseconds(reading.timeMillis).toLocalDateTime(TimeZone.currentSystemDefault())}",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 
                 // Main data
                 reading.mainData?.let { mainData ->
@@ -244,14 +244,8 @@ fun ReadingDetailsDialog(
                         mainData.device?.let { device ->
                             this[MR.strings.model] = device.model
                             this[MR.strings.manufacturer] = device.manufacturer
-                            this[MR.strings.software_version] = device.softwareVersion
-                            this[MR.strings.hardware_version] = device.hardwareVersion
-                        }
-                        mainData.generic?.let { generic ->
-                            this[MR.strings.connection] = generic.connectionStatus
-                            this[MR.strings.connection_text] = generic.connectionText
-                            this[MR.strings.has_sim] = generic.hasSim?.toString()
-                            this[MR.strings.roaming] = generic.roaming?.toString()
+                            device.softwareVersion?.let { this[MR.strings.software_version] = it }
+                            device.hardwareVersion?.let { this[MR.strings.hardware_version] = it }
                         }
                     }
                     
@@ -265,65 +259,113 @@ fun ReadingDetailsDialog(
                 
                 // Signal data  
                 reading.mainData?.signal?.let { signal ->
-                    Text(
-                        text = stringResource(MR.strings.signal),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    
-                    val signalInfo = generateInfoList(signal) {
-                        signal.fourG?.let { lte ->
+                    // 4G/LTE Signal
+                    signal.fourG?.let { lte ->
+                        Text(
+                            text = stringResource(MR.strings.lte),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        
+                        val lteInfo = generateInfoList(lte) {
                             this[MR.strings.rsrp] = "${lte.rsrp ?: "?"} dBm"
                             this[MR.strings.rsrq] = "${lte.rsrq ?: "?"} dB"
                             this[MR.strings.sinr] = "${lte.sinr ?: "?"} dB"
-                            this[MR.strings.band] = lte.band
-                            this[MR.strings.bandwidth] = lte.bandwidth
+                            lte.bands?.firstOrNull()?.let { this[MR.strings.band] = it }
                         }
-                        signal.fiveG?.let { fiveG ->
-                            this[MR.strings.rsrp] = "${fiveG.rsrp ?: "?"} dBm"
-                            this[MR.strings.rsrq] = "${fiveG.rsrq ?: "?"} dB"
-                            this[MR.strings.sinr] = "${fiveG.sinr ?: "?"} dB"
-                            this[MR.strings.band] = fiveG.band
-                            this[MR.strings.bandwidth] = fiveG.bandwidth
+                        
+                        if (lteInfo.isNotEmpty()) {
+                            InfoRow(
+                                items = lteInfo,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
                     }
                     
-                    if (signalInfo.isNotEmpty()) {
-                        InfoRow(
-                            items = signalInfo,
-                            modifier = Modifier.fillMaxWidth(),
+                    // 5G Signal
+                    signal.fiveG?.let { fiveG ->
+                        Text(
+                            text = stringResource(MR.strings.five_g),
+                            style = MaterialTheme.typography.titleMedium,
                         )
+                        
+                        val fiveGInfo = generateInfoList(fiveG) {
+                            this[MR.strings.rsrp] = "${fiveG.rsrp ?: "?"} dBm"
+                            this[MR.strings.rsrq] = "${fiveG.rsrq ?: "?"} dB"
+                            this[MR.strings.sinr] = "${fiveG.sinr ?: "?"} dB"
+                            fiveG.bands?.firstOrNull()?.let { this[MR.strings.band] = it }
+                        }
+                        
+                        if (fiveGInfo.isNotEmpty()) {
+                            InfoRow(
+                                items = fiveGInfo,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    
+                    // Generic signal data
+                    signal.generic?.let { generic ->
+                        val genericInfo = generateInfoList(generic) {
+                            generic.connectionStatus?.let { this[MR.strings.connection] = it }
+                            generic.connectionText?.let { this[MR.strings.connection_text] = it }
+                            generic.roaming?.let { this[MR.strings.roaming] = it.toString() }
+                        }
+                        
+                        if (genericInfo.isNotEmpty()) {
+                            InfoRow(
+                                items = genericInfo,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
                 
                 // Cell data
                 reading.cellData?.cell?.let { cell ->
-                    Text(
-                        text = stringResource(MR.strings.cell_info),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    
-                    val cellInfo = generateInfoList(cell) {
-                        cell.fourG?.let { lte ->
-                            this[MR.strings.cell_id] = lte.cid?.toString()
-                            this[MR.strings.enb_id] = lte.eNBID?.toString()
-                            this[MR.strings.pci] = lte.pci?.toString()
-                            this[MR.strings.tac] = lte.tac?.toString()
-                            this[MR.strings.earfcn] = lte.earfcn?.toString()
+                    // 4G Cell Info
+                    cell.fourG?.let { lte ->
+                        Text(
+                            text = "${stringResource(MR.strings.lte)} Cell",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        
+                        val lteCell = generateInfoList(lte) {
+                            lte.cid?.let { this[MR.strings.cid] = it.toString() }
+                            lte.eNBID?.let { this[MR.strings.enb_id] = it.toString() }
+                            lte.pci?.let { this[MR.strings.pci] = it.toString() }
+                            lte.tac?.let { this[MR.strings.tac] = it.toString() }
+                            lte.earfcn?.let { this[MR.strings.earfcn] = it.toString() }
                         }
-                        cell.fiveG?.let { fiveG ->
-                            this[MR.strings.nci] = fiveG.nci?.toString()
-                            this[MR.strings.gnb_id] = fiveG.gNBID?.toString()
-                            this[MR.strings.pci] = fiveG.pci?.toString()
-                            this[MR.strings.tac] = fiveG.tac?.toString()
-                            this[MR.strings.nrarfcn] = fiveG.nrarfcn?.toString()
+                        
+                        if (lteCell.isNotEmpty()) {
+                            InfoRow(
+                                items = lteCell,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
                     }
                     
-                    if (cellInfo.isNotEmpty()) {
-                        InfoRow(
-                            items = cellInfo,
-                            modifier = Modifier.fillMaxWidth(),
+                    // 5G Cell Info
+                    cell.fiveG?.let { fiveG ->
+                        Text(
+                            text = "${stringResource(MR.strings.five_g)} Cell",
+                            style = MaterialTheme.typography.titleMedium,
                         )
+                        
+                        val fiveGCell = generateInfoList(fiveG) {
+                            fiveG.nci?.let { this[MR.strings.nci] = it.toString() }
+                            fiveG.gNBID?.let { this[MR.strings.gnb_id] = it.toString() }
+                            fiveG.pci?.let { this[MR.strings.pci] = it.toString() }
+                            fiveG.tac?.let { this[MR.strings.tac] = it.toString() }
+                            fiveG.nrarfcn?.let { this[MR.strings.nrarfcn] = it.toString() }
+                        }
+                        
+                        if (fiveGCell.isNotEmpty()) {
+                            InfoRow(
+                                items = fiveGCell,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             }
